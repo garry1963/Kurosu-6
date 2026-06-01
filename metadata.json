@@ -1,0 +1,6 @@
+{
+  "name": "Kurosu 6",
+  "description": "An elegant and challenging logic puzzle game on a 6x6 grid.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
