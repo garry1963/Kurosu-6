@@ -47,15 +47,6 @@ export default function GameBoard({
 
     // Set selected cell first
     onSelectCell(index);
-
-    // Also supports cycle on click/tap directly
-    const currentVal = board[index];
-    let nextVal: CellValue = null;
-    if (currentVal === null) nextVal = 'X';
-    else if (currentVal === 'X') nextVal = 'O';
-    else if (currentVal === 'O') nextVal = null;
-
-    onCellValueSet(index, nextVal);
   };
 
   const handleKeypadPress = (val: CellValue) => {
