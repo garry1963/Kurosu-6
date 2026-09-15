@@ -63,7 +63,14 @@ export default function GameBoard({
     const violation = getViolationType(index);
     const incorrect = isIncorrectEntry(index);
 
-    let base = "aspect-square relative flex items-center justify-center transition-all duration-150 text-3.5xl md:text-4.5xl select-none cursor-pointer ";
+    const sizeClasses = {
+      small: "text-xl md:text-2xl",
+      medium: "text-3xl md:text-4xl",
+      large: "text-5xl md:text-6xl",
+    };
+    const textSizeClass = settings.symbolSize ? sizeClasses[settings.symbolSize] : sizeClasses['medium'];
+
+    let base = `aspect-square relative flex items-center justify-center transition-all duration-150 ${textSizeClass} select-none cursor-pointer `;
 
     // Background color, border, text styles to perfectly match target High Density Theme
     if (incorrect) {

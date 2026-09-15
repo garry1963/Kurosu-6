@@ -35,6 +35,7 @@ export interface Settings {
   autoErrorChecking: boolean;
   showRuleViolations: boolean;
   leftHandedLayout: boolean;
+  symbolSize: 'small' | 'medium' | 'large';
 }
 
 export interface Statistics {

@@ -1,5 +1,5 @@
 import { Settings } from '../types';
-import { Volume2, VolumeX, Smartphone, Eye, Sparkles, CheckSquare, Sparkle, ToggleLeft, Moon, Sun } from 'lucide-react';
+import { Volume2, VolumeX, Smartphone, Eye, Sparkles, CheckSquare, Sparkle, ToggleLeft, Moon, Sun, Type } from 'lucide-react';
 
 interface SettingsPanelProps {
   settings: Settings;
@@ -12,6 +12,13 @@ export default function SettingsPanel({ settings, onSettingsChange, onClose }: S
     onSettingsChange({
       ...settings,
       [key]: !settings[key]
+    });
+  };
+
+  const setSymbolSize = (size: 'small' | 'medium' | 'large') => {
+    onSettingsChange({
+      ...settings,
+      symbolSize: size
     });
   };
 
@@ -145,6 +152,34 @@ export default function SettingsPanel({ settings, onSettingsChange, onClose }: S
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.leftHandedLayout ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
+        </div>
+
+        {/* Symbol Size */}
+        <div className="flex items-center justify-between p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/10 border-2 border-zinc-100 dark:border-zinc-850">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-707 dark:text-zinc-300">
+              <Type className="w-4 h-4 text-[#2563EB]" />
+            </div>
+            <div>
+              <p className="font-bold text-zinc-855 dark:text-zinc-100 text-sm">Symbol Size</p>
+              <p className="text-xs text-zinc-550 dark:text-zinc-400">Adjust the size of X and O characters</p>
+            </div>
+          </div>
+          <div className="flex bg-zinc-200/50 dark:bg-zinc-800 rounded-lg p-1">
+            {(['small', 'medium', 'large'] as const).map((size) => (
+              <button
+                key={size}
+                onClick={() => setSymbolSize(size)}
+                className={`px-3 py-1 text-xs font-bold capitalize rounded-md transition-all cursor-pointer ${
+                  settings.symbolSize === size
+                    ? 'bg-white dark:bg-zinc-600 text-[#2563EB] dark:text-white shadow-sm'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

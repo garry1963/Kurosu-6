@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoErrorChecking: false,
   showRuleViolations: true,
   leftHandedLayout: false,
+  symbolSize: 'medium',
 };
 
 export const DEFAULT_STATS: Statistics = {

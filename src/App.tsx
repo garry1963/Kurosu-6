@@ -213,9 +213,7 @@ export default function App() {
     // E.g. Date ends in odd is 'medium', even is 'hard'
     const seed = getDailySeedForDate(dateStr);
     const dailyDiffs: Difficulty[] = ['easy', 'medium', 'hard', 'expert'];
-    // Let's cycle difficulties: [Sunday=easy, Monday=medium, Tuesday=hard, Wednesday=expert...]
-    const dayOfWeek = new Date().getDay(); // 0 to 6
-    const dailyDiff = dailyDiffs[dayOfWeek % 4];
+    const dailyDiff = dailyDiffs[Math.floor(Math.random() * dailyDiffs.length)];
 
     const puzzle = generatePuzzle(dailyDiff, seed);
     const initialBoard = [...puzzle.clues];
@@ -585,35 +583,6 @@ export default function App() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Local Leaderboard generation deterministically for the day
-  const getDeterministicLeaderboard = () => {
-    const todayStr = getTodayDateString();
-    const seed = getDailySeedForDate(todayStr);
-    
-    // Deterministic times
-    const playerTimes = [
-      { name: 'Oliver S.', timeText: '1m 45s', stars: 3, rawSecs: 105 },
-      { name: 'Amelia W.', timeText: '2m 55s', stars: 3, rawSecs: 175 },
-      { name: 'George T.', timeText: '4m 32s', stars: 2, rawSecs: 272 },
-      { name: 'Sophia L.', timeText: '6m 12s', stars: 1, rawSecs: 372 },
-    ];
-
-    // Seed adjustments to randomize times slightly per day
-    const adjusted = playerTimes.map((item, idx) => {
-      const variation = ((seed + idx) % 40) - 20; // -20s to +20s variation
-      const finalSecs = item.rawSecs + variation;
-      const mins = Math.floor(finalSecs / 60);
-      const secs = finalSecs % 60;
-      return {
-        ...item,
-        timeField: `${mins}m ${secs}s`,
-        rawSecs: finalSecs
-      };
-    });
-
-    return adjusted.sort((a,b) => a.rawSecs - b.rawSecs);
-  };
-
   return (
     <div className={`min-h-screen transition-colors duration-300 pb-16 ${settings.darkMode ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-50 text-zinc-900'}`}>
       <Confetti active={showConfetti} onComplete={() => setShowConfetti(false)} />
@@ -897,31 +866,6 @@ export default function App() {
                   <Award className="w-5 h-5 text-amber-500 mb-1" />
                   <p className="text-[10px] text-zinc-550 dark:text-zinc-500 font-extrabold uppercase tracking-wider">Longest Streak</p>
                   <p className="text-lg font-bold text-zinc-800 dark:text-zinc-100 mt-0.5">{stats.longestStreak} Days</p>
-                </div>
-              </div>
-
-              {/* Deterministic daily leaderboard */}
-              <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
-                <h4 className="text-[10px] uppercase tracking-widest text-zinc-500 dark:text-zinc-450 font-black mb-3.5 flex items-center gap-1.5 label-title">
-                  <Activity className="w-3.5 h-3.5 text-[#2563EB]" /> Daily Leaderboard
-                </h4>
-                
-                <div className="space-y-2">
-                  {getDeterministicLeaderboard().map((user, index) => (
-                    <div key={index} className="flex justify-between items-center text-xs p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/10 border border-zinc-150 dark:border-zinc-800/30">
-                      <div className="flex items-center gap-1.5 font-semibold text-zinc-700 dark:text-zinc-300">
-                        <span className="font-extrabold text-zinc-400 w-4">{index + 1}.</span>
-                        <span>{user.name}</span>
-                      </div>
-                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{user.timeField}</span>
-                    </div>
-                  ))}
-                  {/* Complete Daily Challenge to join board */}
-                  {!gameState.isCompleted && (
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 text-center italic pt-1 font-medium">
-                      Complete daily challenge to see where you rank!
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
@@ -1266,15 +1210,27 @@ export default function App() {
                 Show Stats
               </button>
 
-              <button
-                onClick={() => {
-                  setShowWinDetails(false);
-                  startNewGame(gameState.difficulty, true);
-                }}
-                className="py-2.5 px-6 select-none bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md block text-center flex-1 max-w-[180px] hover:scale-102 active:scale-98"
-              >
-                Play Next Puzzle
-              </button>
+              {gameState.isDaily ? (
+                <button
+                  onClick={() => {
+                    setShowWinDetails(false);
+                    setActiveTab('play');
+                  }}
+                  className="py-2.5 px-6 select-none bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md block text-center flex-1 max-w-[180px] hover:scale-102 active:scale-98"
+                >
+                  Home
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setShowWinDetails(false);
+                    startNewGame(gameState.difficulty, true);
+                  }}
+                  className="py-2.5 px-6 select-none bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md block text-center flex-1 max-w-[180px] hover:scale-102 active:scale-98"
+                >
+                  Play Next Puzzle
+                </button>
+              )}
             </div>
           </div>
         </div>
