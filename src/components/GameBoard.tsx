@@ -85,10 +85,10 @@ export default function GameBoard({
       base += "bg-white dark:bg-zinc-900 text-[#141414] dark:text-zinc-50 font-[900] cursor-not-allowed ";
     } else if (isSelected) {
       // Selected Cell
-      base += "bg-blue-50/80 dark:bg-zinc-800/80 text-[#2563EB] dark:text-blue-300 font-semibold ring-2 ring-[#2563EB]/40 ring-inset ";
+      base += "bg-blue-50/80 dark:bg-zinc-800/80 text-[#141414] dark:text-zinc-50 font-semibold ring-2 ring-[#2563EB]/40 ring-inset ";
     } else {
       // Normal user cell or empty
-      base += "bg-white dark:bg-zinc-900 text-[#2563EB] dark:text-blue-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 font-semibold ";
+      base += "bg-white dark:bg-zinc-900 text-[#141414] dark:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 font-semibold ";
     }
 
     return base;
