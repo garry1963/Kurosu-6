@@ -873,18 +873,35 @@ export default function App() {
             {/* Right Column workspace */}
             <div className="lg:col-span-8 space-y-6">
               
-              {/* Daily state banner */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-805 p-3.5 rounded-2xl flex items-center justify-between shadow-custom select-none">
-                <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
-                  <span className="text-xs uppercase font-black px-2.5 py-1 bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 rounded tracking-widest text-[9px] border border-amber-200/40">
-                    {gameState.difficulty} Daily
-                  </span>
-                  {stats.completedDates.includes(gameState.dateString || '') && (
-                    <span className="text-xs font-black uppercase text-emerald-600 dark:text-emerald-400 flex items-center gap-1 tracking-wider text-[10px]">
-                      <CheckCircle2 className="w-4 h-4 fill-current text-emerald-500" /> Solved Today
-                    </span>
-                  )}
+              {!gameState.isDaily ? (
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 p-12 text-center rounded-2xl w-full mx-auto shadow-custom space-y-4">
+                  <Calendar className="w-12 h-12 text-[#2563EB] mx-auto opacity-50" />
+                  <h3 className="text-xl font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-50">Today's Challenge Awaits</h3>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed font-semibold max-w-sm mx-auto">
+                    Start today's deterministic daily puzzle to keep your streak alive. The puzzle is the same for everyone!
+                  </p>
+                  <button
+                    onClick={startDailyChallenge}
+                    className="py-3 px-8 mt-2 font-extrabold bg-[#2563EB] text-white hover:bg-blue-700 rounded-xl cursor-pointer shadow-md text-sm uppercase tracking-wider active:scale-95 transition-all inline-block"
+                  >
+                    Start Daily Challenge
+                  </button>
                 </div>
+              ) : (
+                <>
+                  {/* Daily state banner */}
+                  <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-805 p-3.5 rounded-2xl flex items-center justify-between shadow-custom select-none">
+                    <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
+                      <span className="text-xs uppercase font-black px-2.5 py-1 bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 rounded tracking-widest text-[9px] border border-amber-200/40">
+                        {gameState.difficulty} Daily
+                      </span>
+                      {stats.completedDates.includes(gameState.dateString || '') && (
+                        <span className="text-xs font-black uppercase text-emerald-600 dark:text-emerald-400 flex items-center gap-1 tracking-wider text-[10px]">
+                          <CheckCircle2 className="w-4 h-4 fill-current text-emerald-500" /> Solved Today
+                        </span>
+                      )}
+                    </div>
+
 
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1.5 font-mono font-bold text-base md:text-lg bg-zinc-50 dark:bg-zinc-800/40 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-inner">
@@ -1012,10 +1029,12 @@ export default function App() {
                   </div>
                 </div>
               )}
+              </>
+              )}
             </div>
           </div>
         )}
-
+        
         {/* Statistics View */}
         {activeTab === 'stats' && (
           <div className="max-w-3xl mx-auto">
@@ -1214,6 +1233,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setShowWinDetails(false);
+                    startNewGame(currentDifficulty, false);
                     setActiveTab('play');
                   }}
                   className="py-2.5 px-6 select-none bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md block text-center flex-1 max-w-[180px] hover:scale-102 active:scale-98"
