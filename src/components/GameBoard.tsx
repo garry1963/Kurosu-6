@@ -10,6 +10,7 @@ interface GameBoardProps {
   onCellValueSet: (index: number, val: CellValue) => void;
   settings: Settings;
   violations: RuleViolation[];
+  isLocked?: boolean;
 }
 
 export default function GameBoard({
@@ -21,18 +22,19 @@ export default function GameBoard({
   onCellValueSet,
   settings,
   violations,
+  isLocked = false,
 }: GameBoardProps) {
 
   // Check if a cell has a rule violation
   const getViolationType = (index: number): 'three-consecutive' | 'too-many-symbols' | null => {
-    if (!settings.showRuleViolations) return null;
+    if (!settings.showRuleViolations || isLocked) return null;
     const block = violations.find(v => v.index === index);
     return block ? block.type : null;
   };
 
   // Check if cell is incorrect against the unique solution
   const isIncorrectEntry = (index: number): boolean => {
-    if (!settings.autoErrorChecking) return false;
+    if (!settings.autoErrorChecking || isLocked) return false;
     const currentVal = board[index];
     const isClue = clues[index] !== null;
     if (!isClue && currentVal !== null) {
@@ -42,6 +44,7 @@ export default function GameBoard({
   };
 
   const handleCellClick = (index: number) => {
+    if (isLocked) return;
     const isClue = clues[index] !== null;
     if (isClue) return;
 
@@ -50,6 +53,7 @@ export default function GameBoard({
   };
 
   const handleKeypadPress = (val: CellValue) => {
+    if (isLocked) return;
     if (selectedCell !== null && clues[selectedCell] === null) {
       onCellValueSet(selectedCell, val);
     }
@@ -58,7 +62,7 @@ export default function GameBoard({
   // Helper styles for cells
   const getCellClassName = (index: number) => {
     const isClue = clues[index] !== null;
-    const isSelected = selectedCell === index;
+    const isSelected = !isLocked && selectedCell === index;
     const val = board[index];
     const violation = getViolationType(index);
     const incorrect = isIncorrectEntry(index);
@@ -70,7 +74,7 @@ export default function GameBoard({
     };
     const textSizeClass = settings.symbolSize ? sizeClasses[settings.symbolSize] : sizeClasses['medium'];
 
-    let base = `aspect-square relative flex items-center justify-center transition-all duration-150 ${textSizeClass} select-none cursor-pointer `;
+    let base = `aspect-square relative flex items-center justify-center transition-all duration-150 ${textSizeClass} select-none ${isLocked ? 'cursor-default' : 'cursor-pointer'} `;
 
     // Background color, border, text styles to perfectly match target High Density Theme
     if (incorrect) {
@@ -88,7 +92,7 @@ export default function GameBoard({
       base += "bg-blue-50/80 dark:bg-zinc-800/80 text-[#141414] dark:text-zinc-50 font-semibold ring-2 ring-[#2563EB]/40 ring-inset ";
     } else {
       // Normal user cell or empty
-      base += "bg-white dark:bg-zinc-900 text-[#141414] dark:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 font-semibold ";
+      base += `bg-white dark:bg-zinc-900 text-[#141414] dark:text-zinc-50 ${isLocked ? '' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/80'} font-semibold `;
     }
 
     return base;
@@ -173,10 +177,26 @@ export default function GameBoard({
       {/* Symbol Pad Keypad (Accessible side controls) */}
       <div className="w-full md:w-auto md:flex-shrink-0">
         <div className="bg-zinc-50 dark:bg-zinc-900/60 p-4 rounded-3xl border border-zinc-200/55 dark:border-zinc-800 shadow-md">
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest font-bold mb-3 text-center">
-            {selectedCell === null ? 'Select a cell above' : 'Choose Symbol'}
-          </p>
-          {keypadContent}
+          {isLocked ? (
+            <div className="flex flex-col items-center justify-center py-4 px-2 space-y-2 text-center max-w-[180px]">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                <Lock className="w-5 h-5" />
+              </div>
+              <p className="text-xs font-black uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
+                Puzzle Locked
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-tight font-medium">
+                Completed & locked until tomorrow's puzzle.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest font-bold mb-3 text-center">
+                {selectedCell === null ? 'Select a cell above' : 'Choose Symbol'}
+              </p>
+              {keypadContent}
+            </>
+          )}
         </div>
       </div>
     </div>

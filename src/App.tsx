@@ -32,6 +32,11 @@ import {
   getTodayDateString,
   calculateStreak,
   DEFAULT_STATS,
+  loadDailyPuzzleState,
+  saveDailyPuzzleState,
+  isDailyCompletedToday,
+  getTimeUntilMidnight,
+  StoredDailyPuzzle,
 } from './utils/persistence';
 
 import Header from './components/Header';
@@ -60,6 +65,9 @@ import {
   Trophy,
   Activity,
   User,
+  Home,
+  Clock,
+  Lock,
 } from 'lucide-react';
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard', 'expert'];
@@ -92,6 +100,16 @@ export default function App() {
 
   // Confetti State
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
+
+  // Daily Puzzle Countdown until next day
+  const [countdown, setCountdown] = useState<string>(getTimeUntilMidnight());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown(getTimeUntilMidnight());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Timer Ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -195,45 +213,69 @@ export default function App() {
     return rawNum;
   };
 
-  // Start daily challenge
-  const startDailyChallenge = () => {
+  // Start or open daily challenge (with completed state locking)
+  const openDailyChallenge = () => {
     const dateStr = getTodayDateString();
-    const isCompletedAlready = stats.completedDates.includes(dateStr);
+    const storedDaily = loadDailyPuzzleState();
+    const isCompletedAlready = stats.completedDates.includes(dateStr) || (storedDaily?.date === dateStr && storedDaily.isCompleted);
 
-    // Tracking for statistics
-    if (gameState && !gameState.isCompleted) {
-      setStats(prev => {
-        const nextStats = { ...prev, totalPlayed: prev.totalPlayed + 1 };
-        saveStats(nextStats);
-        return nextStats;
+    if (storedDaily && storedDaily.date === dateStr) {
+      setGameState({
+        board: isCompletedAlready ? storedDaily.solution : storedDaily.board,
+        clues: storedDaily.clues,
+        solution: storedDaily.solution,
+        difficulty: storedDaily.difficulty,
+        timer: storedDaily.timer,
+        mistakes: storedDaily.mistakes,
+        hintsUsed: storedDaily.hintsUsed,
+        isCompleted: Boolean(isCompletedAlready),
+        isPaused: false,
+        starRating: storedDaily.starRating || (isCompletedAlready ? 3 : 0),
+        isDaily: true,
+        dateString: dateStr,
+        history: [isCompletedAlready ? storedDaily.solution : storedDaily.board],
+        historyIndex: 0,
+      });
+    } else {
+      // Pick random difficulty level for today based on date seed
+      const seed = getDailySeedForDate(dateStr);
+      const dailyDiffs: Difficulty[] = ['easy', 'medium', 'hard', 'expert'];
+      const dailyDiff = dailyDiffs[Math.abs(seed % dailyDiffs.length)];
+
+      const puzzle = generatePuzzle(dailyDiff, seed);
+      const initialBoard = [...puzzle.clues];
+
+      const newDailyState: StoredDailyPuzzle = {
+        date: dateStr,
+        difficulty: dailyDiff,
+        clues: puzzle.clues,
+        solution: puzzle.solution,
+        board: isCompletedAlready ? puzzle.solution : initialBoard,
+        timer: 0,
+        mistakes: 0,
+        hintsUsed: 0,
+        isCompleted: Boolean(isCompletedAlready),
+        starRating: isCompletedAlready ? 3 : 0,
+      };
+      saveDailyPuzzleState(newDailyState);
+
+      setGameState({
+        board: isCompletedAlready ? puzzle.solution : initialBoard,
+        clues: puzzle.clues,
+        solution: puzzle.solution,
+        difficulty: dailyDiff,
+        timer: 0,
+        mistakes: 0,
+        hintsUsed: 0,
+        isCompleted: Boolean(isCompletedAlready),
+        isPaused: false,
+        starRating: isCompletedAlready ? 3 : 0,
+        isDaily: true,
+        dateString: dateStr,
+        history: [initialBoard],
+        historyIndex: 0,
       });
     }
-
-    // Daily Challenge difficulty is hardcoded deterministically to keep it standard
-    // E.g. Date ends in odd is 'medium', even is 'hard'
-    const seed = getDailySeedForDate(dateStr);
-    const dailyDiffs: Difficulty[] = ['easy', 'medium', 'hard', 'expert'];
-    const dailyDiff = dailyDiffs[Math.floor(Math.random() * dailyDiffs.length)];
-
-    const puzzle = generatePuzzle(dailyDiff, seed);
-    const initialBoard = [...puzzle.clues];
-
-    setGameState({
-      board: initialBoard,
-      clues: puzzle.clues,
-      solution: puzzle.solution,
-      difficulty: dailyDiff,
-      timer: 0,
-      mistakes: 0,
-      hintsUsed: 0,
-      isCompleted: false,
-      isPaused: false,
-      starRating: 0,
-      isDaily: true,
-      dateString: dateStr,
-      history: [initialBoard],
-      historyIndex: 0,
-    });
 
     setSelectedCell(null);
     setLogicHintResult(null);
@@ -243,6 +285,8 @@ export default function App() {
     setShowConfetti(false);
     setActiveTab('daily');
   };
+
+  const startDailyChallenge = openDailyChallenge;
 
   // Handle setting/erasing cell value
   const handleCellValueSet = (index: number, val: CellValue) => {
@@ -289,6 +333,20 @@ export default function App() {
       };
     });
 
+    // Save daily puzzle progress if active daily puzzle
+    if (gameState.isDaily) {
+      const todayStr = getTodayDateString();
+      const stored = loadDailyPuzzleState();
+      if (stored && stored.date === todayStr && !stored.isCompleted) {
+        saveDailyPuzzleState({
+          ...stored,
+          board: nextBoard,
+          mistakes: newMistakeCount,
+          timer: gameState.timer,
+        });
+      }
+    }
+
     // Reset error warning highlight if set
     if (errorCheckResult?.index === index) {
       setErrorCheckResult(null);
@@ -332,10 +390,7 @@ export default function App() {
   const handleVictory = (finalMistakes: number) => {
     if (!gameState) return;
 
-    setGameState(prev => {
-      if (!prev) return null;
-      return { ...prev, isCompleted: true };
-    });
+    const isDaily = Boolean(gameState.isDaily || activeTab === 'daily');
 
     // Play arpeggio
     playWinSound(settings.soundEffects);
@@ -349,18 +404,38 @@ export default function App() {
       time,
       finalMistakes,
       gameState.hintsUsed,
-      gameState.isDaily
+      isDaily
     );
+
+    // Lock daily puzzle permanently for today
+    if (isDaily) {
+      const todayStr = getTodayDateString();
+      saveDailyPuzzleState({
+        date: todayStr,
+        difficulty: gameState.difficulty,
+        clues: gameState.clues,
+        solution: gameState.solution,
+        board: [...gameState.solution],
+        timer: time,
+        mistakes: finalMistakes,
+        hintsUsed: gameState.hintsUsed,
+        isCompleted: true,
+        completedAt: new Date().toISOString(),
+        starRating: starRatingNum,
+      });
+    }
 
     // Refresh memory states
     setStats(loadStats());
     setAchievements(loadAchievements());
 
-    // Highlight victory card details overlay
+    // Highlight victory card details overlay and set isDaily & isCompleted
     setGameState((prev) => {
       if (!prev) return null;
       return {
         ...prev,
+        isCompleted: true,
+        isDaily,
         starRating: starRatingNum,
       };
     });
@@ -591,14 +666,24 @@ export default function App() {
       <Header
         activeTab={activeTab}
         setActiveTab={(tab) => {
+          if (tab === 'daily') {
+            openDailyChallenge();
+            return;
+          }
+          if (tab === 'play' && gameState?.isDaily) {
+            startNewGame(currentDifficulty, false);
+            setActiveTab('play');
+            return;
+          }
           setActiveTab(tab);
-          // Pause game when leaving board tabs
-          if (gameState && tab !== 'play' && tab !== 'daily') {
+          // Pause game when leaving board tabs (since play and daily were handled above, tab is stats/achievements/settings/how-to-play)
+          if (gameState) {
             setGameState((prev) => prev ? { ...prev, isPaused: true } : null);
           }
         }}
         streak={stats.currentStreak}
         settings={settings}
+        isDailyDone={isDailyCompletedToday()}
         onThemeToggle={() => {
           const nextSettings = { ...settings, darkMode: !settings.darkMode };
           setSettings(nextSettings);
@@ -671,11 +756,20 @@ export default function App() {
                 </button>
 
                 <button
-                  onClick={startDailyChallenge}
+                  onClick={openDailyChallenge}
                   className="w-full py-3 px-4 border-2 border-zinc-200 dark:border-zinc-850 bg-white dark:bg-zinc-900 text-[#2563EB] dark:text-blue-400 hover:bg-zinc-50 dark:hover:bg-zinc-850 font-extrabold text-center text-xs uppercase tracking-wider rounded-lg active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <Calendar className="w-4 h-4 text-[#2563EB]" />
-                  Try Daily Challenge
+                  {isDailyCompletedToday() ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      Daily Challenge Solved
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="w-4 h-4 text-[#2563EB]" />
+                      Try Daily Challenge
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -868,6 +962,19 @@ export default function App() {
                   <p className="text-lg font-bold text-zinc-800 dark:text-zinc-100 mt-0.5">{stats.longestStreak} Days</p>
                 </div>
               </div>
+
+              {/* Locked Status indicator */}
+              {(gameState.isCompleted || isDailyCompletedToday()) && (
+                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-black text-xs uppercase tracking-wider">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Completed & Locked
+                  </div>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-500 font-medium leading-tight">
+                    Today's puzzle has been solved. No further attempts permitted until tomorrow's new daily puzzle.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Right Column workspace */}
@@ -881,7 +988,7 @@ export default function App() {
                     Start today's deterministic daily puzzle to keep your streak alive. The puzzle is the same for everyone!
                   </p>
                   <button
-                    onClick={startDailyChallenge}
+                    onClick={openDailyChallenge}
                     className="py-3 px-8 mt-2 font-extrabold bg-[#2563EB] text-white hover:bg-blue-700 rounded-xl cursor-pointer shadow-md text-sm uppercase tracking-wider active:scale-95 transition-all inline-block"
                   >
                     Start Daily Challenge
@@ -936,50 +1043,90 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  {/* Game controls toolbar */}
-                  <div className="flex flex-wrap items-center justify-center gap-2 bg-white dark:bg-zinc-900 p-2.5 rounded-2xl border-2 border-zinc-200 dark:border-zinc-850 shadow-custom">
-                    <button
-                      onClick={handleUndo}
-                      disabled={gameState.historyIndex <= 0}
-                      className="p-2 px-3 bg-zinc-50 dark:bg-zinc-805 disabled:opacity-40 rounded-lg border border-zinc-250 dark:border-zinc-700 text-[10px] font-black uppercase tracking-wider text-zinc-700 dark:text-zinc-300 hover:bg-[#141414] hover:text-white dark:hover:bg-zinc-100 dark:hover:text-zinc-950 flex items-center gap-1.5 select-none active:scale-95 transition-all cursor-pointer"
-                    >
-                      <Undo2 className="w-3.5 h-3.5" /> Undo
-                    </button>
+                  {gameState.isCompleted ? (
+                    <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-2 border-emerald-500/30 dark:border-emerald-500/20 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 select-none">
+                      <div className="flex items-center gap-3.5 text-center sm:text-left">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0 shadow-sm">
+                          <CheckCircle2 className="w-7 h-7" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 justify-center sm:justify-start">
+                            <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">
+                              Today's Challenge Completed!
+                            </h3>
+                            <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                              <Lock className="w-3 h-3" /> Locked
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 font-medium">
+                            Puzzle locked — no further attempts allowed. Next daily puzzle available in:
+                          </p>
+                        </div>
+                      </div>
 
-                    <button
-                      onClick={handleRedo}
-                      disabled={gameState.historyIndex >= gameState.history.length - 1}
-                      className="p-2 px-3 bg-zinc-50 dark:bg-zinc-805 disabled:opacity-40 rounded-lg border border-zinc-250 dark:border-zinc-700 text-[10px] font-black uppercase tracking-wider text-zinc-700 dark:text-zinc-300 hover:bg-[#141414] hover:text-white dark:hover:bg-zinc-100 dark:hover:text-zinc-950 flex items-center gap-1.5 select-none active:scale-95 transition-all cursor-pointer"
-                    >
-                      <Redo2 className="w-3.5 h-3.5" /> Redo
-                    </button>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 font-mono font-bold text-sm bg-white dark:bg-zinc-800 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm">
+                          <Clock className="w-4 h-4 text-[#2563EB]" />
+                          <span>{countdown}</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            startNewGame(currentDifficulty, false);
+                            setActiveTab('play');
+                          }}
+                          className="py-2.5 px-4 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-sm flex items-center gap-1.5 active:scale-95"
+                        >
+                          <Home className="w-4 h-4" />
+                          Home
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Game controls toolbar */
+                    <div className="flex flex-wrap items-center justify-center gap-2 bg-white dark:bg-zinc-900 p-2.5 rounded-2xl border-2 border-zinc-200 dark:border-zinc-850 shadow-custom">
+                      <button
+                        onClick={handleUndo}
+                        disabled={gameState.historyIndex <= 0}
+                        className="p-2 px-3 bg-zinc-50 dark:bg-zinc-805 disabled:opacity-40 rounded-lg border border-zinc-250 dark:border-zinc-700 text-[10px] font-black uppercase tracking-wider text-zinc-700 dark:text-zinc-300 hover:bg-[#141414] hover:text-white dark:hover:bg-zinc-100 dark:hover:text-zinc-950 flex items-center gap-1.5 select-none active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Undo2 className="w-3.5 h-3.5" /> Undo
+                      </button>
 
-                    <button
-                      onClick={handleRestart}
-                      className="p-2 px-3 bg-zinc-50 dark:bg-zinc-805 rounded-lg border border-zinc-250 dark:border-zinc-700 text-[10px] font-black uppercase tracking-wider text-zinc-700 dark:text-zinc-300 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-500/20 dark:hover:text-rose-400 flex items-center gap-1.5 select-none active:scale-95 transition-all cursor-pointer"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" /> Restart
-                    </button>
+                      <button
+                        onClick={handleRedo}
+                        disabled={gameState.historyIndex >= gameState.history.length - 1}
+                        className="p-2 px-3 bg-zinc-50 dark:bg-zinc-805 disabled:opacity-40 rounded-lg border border-zinc-250 dark:border-zinc-700 text-[10px] font-black uppercase tracking-wider text-zinc-700 dark:text-zinc-300 hover:bg-[#141414] hover:text-white dark:hover:bg-zinc-100 dark:hover:text-zinc-950 flex items-center gap-1.5 select-none active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Redo2 className="w-3.5 h-3.5" /> Redo
+                      </button>
 
-                    <div className="h-6 w-[1px] bg-zinc-250 dark:bg-zinc-750 mx-1 hidden sm:block" />
+                      <button
+                        onClick={handleRestart}
+                        className="p-2 px-3 bg-zinc-50 dark:bg-zinc-805 rounded-lg border border-zinc-250 dark:border-zinc-700 text-[10px] font-black uppercase tracking-wider text-zinc-700 dark:text-zinc-300 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-500/20 dark:hover:text-rose-400 flex items-center gap-1.5 select-none active:scale-95 transition-all cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> Restart
+                      </button>
 
-                    <button
-                      onClick={() => setActiveHintTypeModel(true)}
-                      className="p-2 px-4 bg-blue-50 dark:bg-blue-950/20 text-[#2563EB] dark:text-blue-400 border border-blue-100 dark:border-blue-900/30 rounded-lg text-[10px] font-black uppercase tracking-wide hover:bg-blue-100 flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                    >
-                      <HelpCircle className="w-3.5 h-3.5" /> Hints Center
-                    </button>
+                      <div className="h-6 w-[1px] bg-zinc-250 dark:bg-zinc-750 mx-1 hidden sm:block" />
 
-                    <button
-                      onClick={handleManualCheck}
-                      className="p-2 px-4 bg-white dark:bg-zinc-800 border bg-zinc-50 dark:bg-zinc-805 border-zinc-250 dark:border-zinc-700 text-[10px] font-black uppercase tracking-wide hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-1.2 active:scale-95 transition-all cursor-pointer ml-auto"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Check Grid
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => setActiveHintTypeModel(true)}
+                        className="p-2 px-4 bg-blue-50 dark:bg-blue-950/20 text-[#2563EB] dark:text-blue-400 border border-blue-100 dark:border-blue-900/30 rounded-lg text-[10px] font-black uppercase tracking-wide hover:bg-blue-100 flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" /> Hints Center
+                      </button>
+
+                      <button
+                        onClick={handleManualCheck}
+                        className="p-2 px-4 bg-white dark:bg-zinc-800 border bg-zinc-50 dark:bg-zinc-805 border-zinc-250 dark:border-zinc-700 text-[10px] font-black uppercase tracking-wide hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-1.2 active:scale-95 transition-all cursor-pointer ml-auto"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Check Grid
+                      </button>
+                    </div>
+                  )}
 
                   {/* Mistakes Counter */}
-                  {gameState.mistakes > 0 && (
+                  {!gameState.isCompleted && gameState.mistakes > 0 && (
                     <div className="bg-rose-50/20 border border-rose-200 dark:border-rose-900/30 p-3 rounded-2xl px-5 text-sm flex items-center justify-between text-rose-620 dark:text-rose-400">
                       <div className="flex items-center gap-1.5">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -1025,6 +1172,7 @@ export default function App() {
                       onCellValueSet={handleCellValueSet}
                       settings={settings}
                       violations={violations}
+                      isLocked={Boolean(gameState.isDaily && gameState.isCompleted)}
                     />
                   </div>
                 </div>
@@ -1167,8 +1315,16 @@ export default function App() {
               </div>
               <h2 className="text-3xl font-black text-zinc-900 dark:text-zinc-50 tracking-tight">Kurosu Grid Solved!</h2>
               <p className="text-sm text-zinc-400 dark:text-zinc-500 font-medium">
-                {gameState.isDaily ? "Daily Challenge successfully recorded." : "Classic puzzle solved beautifully."}
+                {Boolean(gameState.isDaily || activeTab === 'daily')
+                  ? "Daily Challenge successfully completed & locked until tomorrow."
+                  : "Classic puzzle solved beautifully."}
               </p>
+              {Boolean(gameState.isDaily || activeTab === 'daily') && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 text-xs font-bold rounded-full border border-emerald-200/60 dark:border-emerald-800/60">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Daily Puzzle Locked Until Tomorrow
+                </div>
+              )}
             </div>
 
             {/* Stars Rating Visual representation */}
@@ -1229,24 +1385,27 @@ export default function App() {
                 Show Stats
               </button>
 
-              {gameState.isDaily ? (
+              {Boolean(gameState.isDaily || activeTab === 'daily') ? (
                 <button
+                  id="victory-home-btn"
                   onClick={() => {
                     setShowWinDetails(false);
                     startNewGame(currentDifficulty, false);
                     setActiveTab('play');
                   }}
-                  className="py-2.5 px-6 select-none bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md block text-center flex-1 max-w-[180px] hover:scale-102 active:scale-98"
+                  className="py-2.5 px-6 select-none bg-[#2563EB] hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 flex-1 max-w-[180px] hover:scale-102 active:scale-98"
                 >
+                  <Home className="w-4 h-4" />
                   Home
                 </button>
               ) : (
                 <button
+                  id="victory-next-btn"
                   onClick={() => {
                     setShowWinDetails(false);
                     startNewGame(gameState.difficulty, true);
                   }}
-                  className="py-2.5 px-6 select-none bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md block text-center flex-1 max-w-[180px] hover:scale-102 active:scale-98"
+                  className="py-2.5 px-6 select-none bg-[#2563EB] hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md block text-center flex-1 max-w-[180px] hover:scale-102 active:scale-98"
                 >
                   Play Next Puzzle
                 </button>

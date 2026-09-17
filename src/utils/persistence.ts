@@ -279,3 +279,66 @@ export function recordGameCompletion(
     isNewBestTime,
   };
 }
+
+// Daily Puzzle Persistence & Locking
+export interface StoredDailyPuzzle {
+  date: string;
+  difficulty: Difficulty;
+  clues: CellValue[];
+  solution: CellValue[];
+  board: CellValue[];
+  timer: number;
+  mistakes: number;
+  hintsUsed: number;
+  isCompleted: boolean;
+  completedAt?: string;
+  starRating?: number;
+}
+
+const DAILY_PUZZLE_KEY = 'kurosu6_daily_state_v1';
+
+export function loadDailyPuzzleState(): StoredDailyPuzzle | null {
+  try {
+    const saved = localStorage.getItem(DAILY_PUZZLE_KEY);
+    if (saved) {
+      return JSON.parse(saved) as StoredDailyPuzzle;
+    }
+  } catch (e) {
+    console.error('Error loading daily puzzle state', e);
+  }
+  return null;
+}
+
+export function saveDailyPuzzleState(state: StoredDailyPuzzle): void {
+  try {
+    localStorage.setItem(DAILY_PUZZLE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error('Error saving daily puzzle state', e);
+  }
+}
+
+export function isDailyCompletedToday(): boolean {
+  const todayStr = getTodayDateString();
+  const stats = loadStats();
+  if (stats.completedDates && stats.completedDates.includes(todayStr)) {
+    return true;
+  }
+  const daily = loadDailyPuzzleState();
+  if (daily && daily.date === todayStr && daily.isCompleted) {
+    return true;
+  }
+  return false;
+}
+
+export function getTimeUntilMidnight(): string {
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const diffMs = midnight.getTime() - now.getTime();
+  if (diffMs <= 0) return '00:00:00';
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+

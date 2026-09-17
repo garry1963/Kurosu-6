@@ -7,6 +7,7 @@ interface HeaderProps {
   streak: number;
   settings: Settings;
   onThemeToggle: () => void;
+  isDailyDone?: boolean;
 }
 
 export default function Header({
@@ -15,6 +16,7 @@ export default function Header({
   streak,
   settings,
   onThemeToggle,
+  isDailyDone = false,
 }: HeaderProps) {
   const tabs = [
     { id: 'play', label: 'Classic Game', icon: <Sparkles className="w-4 h-4" /> },
@@ -79,6 +81,9 @@ export default function Header({
             >
               {tab.icon}
               <span>{tab.label}</span>
+              {tab.id === 'daily' && isDailyDone && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 ml-0.5" title="Daily challenge completed" />
+              )}
             </button>
           );
         })}
